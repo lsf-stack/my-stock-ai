@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>SURVIVOR AI 戰術終端 v4.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .strategy-card { @apply border-t-8 transition-all duration-500 p-6 rounded-2xl flex flex-col justify-center text-center shadow-2xl h-full bg-gray-900 border-gray-800; }
+        .is-buy { background-color: rgba(20, 83, 45, 0.9) !important; border-color: #22c55e !important; color: white !important; box-shadow: 0 0 30px rgba(34, 197, 94, 0.4); }
+        .is-danger { background-color: rgba(127, 29, 29, 0.9) !important; border-color: #ef4444 !important; color: white !important; animation: pulse-red 1.5s infinite; }
+        .is-wait { background-color: rgba(120, 53, 15, 0.9) !important; border-color: #f59e0b !important; color: white !important; }
+        @keyframes pulse-red { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.02); opacity: 0.8; } }
+        #spike-dropdown { @apply absolute z-50 w-full bg-gray-900 border border-gray-700 rounded-b-2xl shadow-2xl hidden max-h-80 overflow-y-auto; }
+        .spike-item { @apply p-4 border-b border-gray-800 cursor-pointer hover:bg-blue-900 flex justify-between items-center transition-all; }
+    </style>
+</head>
+<body class="bg-black text-gray-100 min-h-screen p-6 font-sans">
+    <div class="max-w-7xl mx-auto">
+        <header class="flex justify-between items-center mb-6 px-2">
+            <h1 class="text-3xl font-black text-yellow-500 italic">SURVIVOR AI</h1>
+            <div id="clock" class="text-xl font-mono text-gray-500">--:--:--</div>
+        </header>
+
+        <!-- 決策區 -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-6 mb-8 text-white">
+            <div id="day-box" class="strategy-card md:col-span-4">
+                <div class="text-[10px] uppercase font-bold opacity-60 mb-2">當沖戰術 (Day Trade)</div>
+                <div id="day-verdict" class="text-3xl font-black italic tracking-tighter">等待中</div>
+            </div>
+            <div id="swing-box" class="strategy-card md:col-span-4">
+                <div class="text-[10px] uppercase font-bold opacity-60 mb-2">波段趨勢 (Swing)</div>
+                <div id="swing-verdict" class="text-3xl font-black italic tracking-tighter">--</div>
+            </div>
+            <div class="md:col-span-4 grid grid-cols-1 gap-4 text-white">
+                <div class="bg-gray-900 p-4 rounded-xl border border-gray-800 flex justify-between items-center px-8">
+                    <div><div class="text-[10px] text-blue-400 font-bold uppercase tracking-widest">台幣匯率</div><div id="ntd-val" class="text-2xl font-black">--</div></div>
+                    <div id="ntd-gap" class="text-sm font-bold">--</div>
+                </div>
+                <div class="bg-gray-900 p-4 rounded-xl border border-gray-800 flex justify-between items-center px-8">
+                    <div><div class="text-[10px] text-purple-400 font-bold uppercase tracking-widest">期貨價差</div><div id="real-basis" class="text-2xl font-black">--</div></div>
+                    <div class="text-[10px] text-gray-600 font-mono">Scan: <span id="last-scan">--</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 追蹤區 -->
+        <div class="bg-gray-900 p-8 rounded-3xl border border-gray-800 grid grid-cols-1 lg:grid-cols-5 gap-10">
+            <div class="lg:col-span-2 space-y-8">
+                <div class="relative">
+                    <div class="flex shadow-2xl">
+                        <input type="text" id="stock-ticker" onfocus="showSpikes()" onkeyup="if(event.key==='Enter') startTracking()" placeholder="輸入代號或選取爆量股" class="bg-black border-2 border-gray-700 p-5 rounded-l-2xl w-full text-3xl font-black text-blue-500 outline-none focus:border-blue-700 transition-all">
+                        <button onclick="startTracking()" class="bg-blue-600 px-10 rounded-r-2xl font-black text-xl hover:bg-blue-500 transition active:scale-95">追蹤</button>
+                    </div>
+                    <div id="spike-dropdown">
+                        <div class="p-3 text-[10px] text-yellow-500 font-black uppercase tracking-widest bg-black/50 border-b border-gray-800">🔥 背景掃描：成交量 > 昨日 2 倍</div>
+                        <div id="spike-list"></div>
+                    </div>
+                </div>
+
+                <div id="stock-info" class="hidden border-l-8 border-yellow-500 pl-6 bg-black/20 py-4 rounded-r-2xl">
+                    <h2 id="res-name" class="text-4xl font-black text-white">--</h2>
+                    <div class="flex items-center space-x-6 mt-2">
+                        <span>現價: <b id="res-price" class="text-blue-400 text-3xl font-mono tracking-tighter">--</b></span>
+                        <div class="text-[10px] text-gray-500 font-bold leading-tight underline uppercase">20MA Life-Line<br><span id="res-ma" class="text-yellow-500 text-base">--</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-3 h-[450px] bg-black/40 rounded-3xl p-6 border border-gray-800 relative">
+                <div id="chart-date" class="absolute top-4 left-6 text-[10px] font-bold text-gray-500 uppercase tracking-widest">--</div>
+                <canvas id="intradayChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let myChart = null;
+        let activeTicker = null;
+        let marketData = { current: 32.1, gap: 0 };
+
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW', {hour12:false}); }, 1000);
+
+        async function updateMarket() {
+            try {
+                const res = await fetch('/api/market');
+                const data = await res.json();
+                marketData = data.fx;
+                document.getElementById('ntd-val').innerText = data.fx.current;
+                document.getElementById('ntd-gap').innerText = data.fx.gap > 0 ? `貶 +${data.fx.gap}` : `升 ${data.fx.gap}`;
+                document.getElementById('ntd-gap').className = `text-sm font-bold ${data.fx.gap > 0 ? 'text-red-500' : 'text-green-500'}`;
+                document.getElementById('real-basis').innerText = data.futures.night_close - data.futures.spot_close + 160;
+                document.getElementById('last-scan').innerText = data.last_scan;
+
+                const list = document.getElementById('spike-list');
+                list.innerHTML = data.spikes.map(s => `
+                    <div class="spike-item" onclick="selectTicker('${s.ticker}')">
+                        <div class="flex flex-col"><span class="font-black text-white text-lg">${s.name}</span><span class="text-[10px] text-gray-500">價: <b class="text-blue-400">${s.price}</b></span></div>
+                        <div class="text-right"><div class="text-red-500 font-black text-xl">${s.ratio}x</div><div class="text-[8px] text-gray-600 font-bold uppercase tracking-widest">Vol Spike</div></div>
+                    </div>
+                `).join('');
+            } catch(e){}
+        }
+
+        function showSpikes() { document.getElementById('spike-dropdown').style.display = 'block'; }
+        function selectTicker(t) { document.getElementById('stock-ticker').value = t; document.getElementById('spike-dropdown').style.display = 'none'; startTracking(); }
+        window.onclick = (e) => { if(!e.target.closest('.relative')) document.getElementById('spike-dropdown').style.display = 'none'; }
+
+        function startTracking() { activeTicker = document.getElementById('stock-ticker').value; if(activeTicker) refresh(); }
+
+        async function refresh() {
+            if(!activeTicker) return;
+            try {
+                const res = await fetch(`/api/stock/${activeTicker}`);
+                const data = await res.json();
+                if(data.status === 'success') {
+                    document.getElementById('stock-info').classList.remove('hidden');
+                    document.getElementById('res-name').innerText = data.name;
+                    document.getElementById('res-price').innerText = data.price;
+                    document.getElementById('res-ma').innerText = data.ma20;
+                    document.getElementById('chart-date').innerText = `Date: ${data.date} (Intraday 1M)`;
+                    handleVerdicts(data);
+                    renderChart(data.intraday, data.ma20);
+                }
+            } catch(e){}
+        }
+
+        function handleVerdicts(stock) {
+            const dayBox = document.getElementById('day-box'), swingBox = document.getElementById('swing-box');
+            const dayText = document.getElementById('day-verdict'), swingText = document.getElementById('swing-verdict');
+
+            dayBox.classList.remove('is-buy', 'is-danger', 'is-wait');
+            if (stock.action === "ENTRY") { dayBox.classList.add('is-buy'); dayText.innerText = "適合上車"; }
+            else if (stock.action === "EXIT") { dayBox.classList.add('is-danger'); dayText.innerText = "建議下車"; }
+            else { dayText.innerText = "持有觀望"; }
+
+            swingBox.classList.remove('is-buy', 'is-danger', 'is-wait');
+            if (marketData.current >= 32.5 || marketData.gap >= 0.05) { swingBox.classList.add('is-danger'); swingText.innerText = "絕對空手"; }
+            else if (stock.is_above_ma20) { swingBox.classList.add('is-buy'); swingText.innerText = "多頭趨勢"; }
+            else { swingBox.classList.add('is-wait'); swingText.innerText = "空頭觀望"; }
+        }
+
+        function renderChart(cd, ma20) {
+            const ctx = document.getElementById('intradayChart').getContext('2d');
+            if(myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: cd.labels,
+                    datasets: [
+                        { label: '股價', data: cd.prices, borderColor: '#3b82f6', borderWidth: 4, pointRadius: 0, fill: false, tension: 0.1 },
+                        { label: '20MA', data: Array(cd.labels.length).fill(ma20), borderColor: '#ef4444', borderDash: [6, 6], borderWidth: 2, pointRadius: 0, fill: false }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: true, ticks: { display: false } }, y: { ticks: { color: '#666' }, grid: { color: '#111' } } } }
+            });
+        }
+
+        updateMarket();
+        setInterval(updateMarket, 60000);
+        setInterval(refresh, 10000);
+    </script>
+</body>
+</html>
