@@ -1,5 +1,5 @@
 Flask
-yfinance>=0.2.38
+yfinance>=0.2.40
 pandas
 requests
 beautifulsoup4
