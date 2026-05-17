@@ -1,5 +1,6 @@
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 import pandas as pd
@@ -11,12 +12,18 @@ from flask import Flask, jsonify, render_template
 app = Flask(__name__)
 
 FALLBACK_POOL = [
-    "2330", "2317", "2454", "2303", "2382", "3231", "3661", "3711",
-    "3034", "2379", "2357", "2383", "3017", "2368", "2408", "3443",
-    "2344", "2409", "3481", "1513", "1519", "1504", "2603", "2609",
-    "2615", "2618", "2610", "2881", "2882", "2884", "2886", "2891",
-    "5871", "1216", "1301", "1303", "2002", "2324", "2356", "4938",
-    "5314", "8069", "5483", "3293",
+    "3481", "2303", "6770", "2344", "2409", "2408", "2317", "2337",
+    "2887", "2324", "2327", "6116", "2881", "1303", "2498", "1802",
+    "3231", "2382", "6239", "2883", "2356", "2891", "2882", "2002",
+    "2618", "2603", "2609", "2615", "2610", "2330", "2454", "3711",
+    "3034", "2379", "2383", "3017", "2368", "3443", "1513", "1519",
+    "1504", "5871", "1216", "1301", "4938", "5314", "8069", "5483",
+    "3293", "2357", "3661", "2308", "2313", "2329", "2345", "2353",
+    "2367", "2371", "2376", "2385", "2393", "2404", "2449", "2474",
+    "2492", "2605", "2617", "2634", "2637", "2884", "2885", "2886",
+    "2888", "2890", "2892", "3035", "3045", "3059", "3189", "3374",
+    "3653", "3702", "4743", "4968", "5009", "6235", "6462", "6531",
+    "6669", "8046", "8112", "8150", "8210", "8299", "8358", "8996",
 ]
 
 cache = {
@@ -25,6 +32,7 @@ cache = {
     "pool_source": "fallback",
     "last_scan": "--",
     "scan_status": "warming",
+    "scan_progress": {"done": 0, "total": 0},
     "stock_analysis": {},
     "names": {},
     "fx": 32.2,
@@ -335,24 +343,32 @@ def rank_candidate(item):
     )
 
 
+def publish_candidates(candidates):
+    candidates.sort(key=rank_candidate, reverse=True)
+    cache["candidates"] = candidates[:10]
+
+
 def scan_top_candidates():
     pool, pool_date = fetch_top_volume_pool(limit=100)
     cache["monitor_pool"] = pool
     cache["pool_source"] = pool_date
+    cache["scan_progress"] = {"done": 0, "total": len(pool)}
 
     candidates = []
-    for ticker in pool:
-        try:
-            item = analyze_stock(ticker, include_intraday=False)
-            if not item:
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(analyze_stock, ticker, False) for ticker in pool]
+        for future in as_completed(futures):
+            cache["scan_progress"]["done"] += 1
+            try:
+                item = future.result()
+                if item and item["score"] >= 2 and item["is_above_ma20"]:
+                    candidates.append(item)
+                    publish_candidates(candidates)
+            except Exception:
                 continue
-            if item["score"] >= 2 and item["is_above_ma20"]:
-                candidates.append(item)
-        except Exception:
-            continue
 
-    candidates.sort(key=rank_candidate, reverse=True)
-    return candidates[:10]
+    publish_candidates(candidates)
+    return cache["candidates"]
 
 
 def background_scanner():
@@ -391,6 +407,7 @@ def market_api():
         "candidates": cache["candidates"],
         "pool_size": len(cache["monitor_pool"]),
         "pool_source": cache["pool_source"],
+        "scan_progress": cache["scan_progress"],
         "last_scan": cache["last_scan"],
         "scan_status": cache["scan_status"],
     })
