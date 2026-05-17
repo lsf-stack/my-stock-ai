@@ -25,6 +25,7 @@ cache = {
     "pool_source": "fallback",
     "last_scan": "--",
     "scan_status": "warming",
+    "stock_analysis": {},
     "names": {},
     "fx": 32.2,
 }
@@ -260,7 +261,16 @@ def download_stock_frames(ticker):
     return pure, None, pd.DataFrame(), pd.DataFrame()
 
 
+def cache_key(ticker, include_intraday):
+    return f"{clean_ticker(ticker)}:{'full' if include_intraday else 'scan'}"
+
+
 def analyze_stock(ticker, include_intraday=True):
+    key = cache_key(ticker, include_intraday)
+    cached = cache["stock_analysis"].get(key)
+    if cached and time.time() - cached["time"] < 600:
+        return cached["data"]
+
     pure, target, df_1m, df_1d = download_stock_frames(ticker)
     if df_1m.empty or df_1d.empty:
         return None
@@ -309,6 +319,7 @@ def analyze_stock(ticker, include_intraday=True):
             "prices": close_today.round(2).tolist(),
         }
 
+    cache["stock_analysis"][key] = {"time": time.time(), "data": result}
     return result
 
 
@@ -325,7 +336,7 @@ def rank_candidate(item):
 
 
 def scan_top_candidates():
-    pool, pool_date = fetch_top_volume_pool(limit=300)
+    pool, pool_date = fetch_top_volume_pool(limit=100)
     cache["monitor_pool"] = pool
     cache["pool_source"] = pool_date
 
