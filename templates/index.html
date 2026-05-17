@@ -193,11 +193,17 @@
                 document.getElementById('ntd-val').innerText = data.fx || "--";
                 marketFX = data.fx;
                 const select = document.getElementById('spike-select');
-                select.innerHTML = '<option value="">暴量觀察清單目前無資料</option>';
-                (data.spikes || []).forEach(s => {
+                const candidates = data.candidates || data.spikes || [];
+                const scanLabel = data.scan_status === "scanning"
+                    ? "AI Top 10 候選清單掃描中..."
+                    : candidates.length === 0
+                        ? "AI Top 10 候選清單目前無符合條件標的"
+                        : `AI Top 10 候選清單 | 更新 ${data.last_scan}`;
+                select.innerHTML = `<option value="">${scanLabel}</option>`;
+                candidates.forEach((s, index) => {
                     const opt = document.createElement('option');
                     opt.value = s.ticker;
-                    opt.innerText = `${s.ratio}x ${s.name} - $${s.price}`;
+                    opt.innerText = `#${index + 1} ${s.name}(${s.ticker}) | Score ${s.score} | Vol ${s.volume_ratio}x | RSI ${s.rsi ?? "--"} | $${s.price}`;
                     select.appendChild(opt);
                 });
             } catch (e) {}
