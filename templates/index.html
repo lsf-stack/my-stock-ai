@@ -98,7 +98,7 @@
                         <input type="text" id="stock-ticker" onclick="this.select()" onkeyup="if(event.key==='Enter') startTracking()" placeholder="輸入代號" class="bg-transparent p-5 w-full text-5xl font-black text-blue-400 outline-none">
                         <button onclick="startTracking()" class="bg-[#2f67e2] px-10 text-white font-black text-2xl active:bg-blue-800">追蹤</button>
                     </div>
-                    <select id="spike-select" onchange="selectFromDropdown(this)" class="mt-4 w-full bg-gray-800 border border-gray-700 p-4 rounded-xl text-lg text-yellow-500 font-bold outline-none"></select>
+                    <select id="spike-select" onchange="selectFromDropdown(this)" class="mt-4 w-full bg-gray-800 border border-gray-700 p-4 rounded-xl text-lg text-yellow-500 font-bold font-mono outline-none"></select>
                 </div>
                 <div id="stock-header" class="hidden border-l-[10px] border-yellow-500 pl-8 py-4 bg-black/20 rounded-r-3xl">
                     <h2 id="res-name" class="text-6xl font-black text-white tracking-tight mb-4 uppercase">--</h2>
@@ -205,7 +205,7 @@
                 candidates.forEach((s, index) => {
                     const opt = document.createElement('option');
                     opt.value = s.ticker;
-                    opt.innerText = `#${index + 1} ${s.name}(${s.ticker}) | Score ${s.score} | Vol ${s.volume_ratio}x | RSI ${s.rsi ?? "--"} | $${s.price}`;
+                    opt.innerText = formatCandidateOption(s, index);
                     select.appendChild(opt);
                 });
             } catch (e) {}
@@ -221,6 +221,21 @@
         function startTracking() {
             activeTicker = document.getElementById('stock-ticker').value.trim();
             if (activeTicker) refresh();
+        }
+
+        function padText(value, width, align = "left") {
+            const text = String(value ?? "--");
+            return align === "right" ? text.padStart(width, " ") : text.padEnd(width, " ");
+        }
+
+        function formatCandidateOption(s, index) {
+            const rank = `#${index + 1}`.padEnd(4, " ");
+            const name = padText(`${s.name}(${s.ticker})`, 16);
+            const score = `S:${padText(s.score, 2, "right")}`;
+            const vol = `V:${padText(`${s.volume_ratio}x`, 6, "right")}`;
+            const rsi = `R:${padText(s.rsi ?? "--", 6, "right")}`;
+            const price = `$${padText(s.price, 7, "right")}`;
+            return `${rank}${name} ${score}  ${vol}  ${rsi}  ${price}`;
         }
 
         function renderList(items, fallback, colorClass) {
