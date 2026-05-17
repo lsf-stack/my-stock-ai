@@ -2,16 +2,48 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SURVIVOR AI Tactical Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        .strategy-card { @apply border-t-8 transition-all duration-500 p-6 rounded-2xl flex flex-col justify-center text-center shadow-2xl h-full bg-gray-900 border-gray-800; }
-        .is-buy { background-color: #059669 !important; border-color: #10b981 !important; color: white !important; box-shadow: 0 0 40px rgba(16, 185, 129, 0.6); }
-        .is-danger { background-color: #dc2626 !important; border-color: #f87171 !important; color: white !important; animation: pulse-alert 1s infinite; box-shadow: 0 0 40px rgba(220, 38, 38, 0.6); }
+        .strategy-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
+            padding: 1.5rem;
+            text-align: center;
+            background-color: #111827;
+            border-top: 8px solid #1f2937;
+            border-radius: 1rem;
+            box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.45);
+            transition: all 500ms;
+        }
+        .is-buy { background-color: #059669 !important; border-color: #10b981 !important; color: white !important; box-shadow: 0 0 40px rgba(16, 185, 129, 0.45); }
+        .is-danger { background-color: #dc2626 !important; border-color: #f87171 !important; color: white !important; animation: pulse-alert 1s infinite; box-shadow: 0 0 40px rgba(220, 38, 38, 0.45); }
         .is-wait { background-color: #d97706 !important; border-color: #fbbf24 !important; color: white !important; }
         @keyframes pulse-alert { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
-        .reason-box { @apply text-2xl font-bold bg-black/40 p-6 rounded-2xl border border-gray-700 leading-relaxed min-h-[160px] flex flex-col justify-center; }
+        .reason-box {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0.5rem;
+            min-height: 170px;
+            padding: 1.5rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+            line-height: 1.625;
+            background-color: rgb(0 0 0 / 0.4);
+            border: 1px solid #374151;
+            border-radius: 1rem;
+        }
+        .metric {
+            padding: 1rem;
+            background-color: rgb(0 0 0 / 0.3);
+            border: 1px solid #1f2937;
+            border-radius: 0.75rem;
+        }
     </style>
 </head>
 <body class="bg-[#0b0e14] text-gray-100 min-h-screen p-6 font-sans">
@@ -20,31 +52,74 @@
             SURVIVOR AI <span id="clock" class="text-gray-600 font-mono text-lg ml-4 not-italic tracking-normal">--:--:--</span>
         </header>
 
-        <!-- 頂部決策格 -->
         <div class="grid grid-cols-1 md:grid-cols-12 gap-6 mb-8">
-            <div id="day-box" class="strategy-card md:col-span-4"><div class="text-xs font-black opacity-50 mb-1 uppercase">當沖即時指令</div><div id="day-verdict" class="text-5xl font-black italic">等待中</div></div>
-            <div id="swing-box" class="strategy-card md:col-span-4"><div class="text-xs font-black opacity-50 mb-1 uppercase">波段趨勢 (Daily)</div><div id="swing-verdict" class="text-5xl font-black italic">--</div></div>
-            <div class="md:col-span-4 bg-gray-900/50 p-6 rounded-2xl border border-gray-800 flex justify-between items-center px-10">
-                <span class="text-blue-400 font-bold text-xs uppercase">台幣匯率</span>
-                <b id="ntd-val" class="text-4xl font-mono text-white tracking-tighter">--</b>
+            <div id="day-box" class="strategy-card md:col-span-4">
+                <div class="text-xs font-black opacity-60 mb-1 uppercase">日內戰術</div>
+                <div id="day-verdict" class="text-5xl font-black italic">等待輸入</div>
+            </div>
+            <div id="swing-box" class="strategy-card md:col-span-4">
+                <div class="text-xs font-black opacity-60 mb-1 uppercase">波段趨勢 Daily</div>
+                <div id="swing-verdict" class="text-5xl font-black italic">--</div>
+            </div>
+            <div class="md:col-span-4 bg-gray-900/50 p-6 rounded-2xl border border-gray-800">
+                <div class="flex justify-between items-center mb-5">
+                    <span class="text-blue-400 font-bold text-xs uppercase">美元兌台幣</span>
+                    <b id="ntd-val" class="text-5xl font-mono text-white tracking-tighter">--</b>
+                </div>
+                <div class="grid grid-cols-5 gap-2 text-center">
+                    <div class="bg-black/30 rounded-lg p-2 border border-gray-800">
+                        <div class="text-[10px] text-gray-500 font-black uppercase">Score</div>
+                        <div id="ctrl-score" class="text-lg font-mono font-black text-white">--</div>
+                    </div>
+                    <div class="bg-black/30 rounded-lg p-2 border border-gray-800">
+                        <div class="text-[10px] text-gray-500 font-black uppercase">MA5</div>
+                        <div id="ctrl-ma5" class="text-lg font-mono font-black text-emerald-400">--</div>
+                    </div>
+                    <div class="bg-black/30 rounded-lg p-2 border border-gray-800">
+                        <div class="text-[10px] text-gray-500 font-black uppercase">20MA</div>
+                        <div id="ctrl-ma20" class="text-lg font-mono font-black text-yellow-500">--</div>
+                    </div>
+                    <div class="bg-black/30 rounded-lg p-2 border border-gray-800">
+                        <div class="text-[10px] text-gray-500 font-black uppercase">RSI</div>
+                        <div id="ctrl-rsi" class="text-lg font-mono font-black text-white">--</div>
+                    </div>
+                    <div class="bg-black/30 rounded-lg p-2 border border-gray-800">
+                        <div class="text-[10px] text-gray-500 font-black uppercase">Vol</div>
+                        <div id="ctrl-volume" class="text-lg font-mono font-black text-white">--</div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- 主操作區 -->
         <div class="bg-[#161b22] p-8 rounded-3xl border border-gray-800 grid grid-cols-1 lg:grid-cols-5 gap-10 mb-8">
             <div class="lg:col-span-2 space-y-8">
                 <div>
                     <div class="flex shadow-lg overflow-hidden rounded-2xl border-2 border-gray-700 bg-black">
-                        <input type="text" id="stock-ticker" onclick="this.value=''" onkeyup="if(event.key==='Enter') startTracking()" placeholder="代號" class="bg-transparent p-5 w-full text-5xl font-black text-blue-400 outline-none">
+                        <input type="text" id="stock-ticker" onclick="this.select()" onkeyup="if(event.key==='Enter') startTracking()" placeholder="輸入代號" class="bg-transparent p-5 w-full text-5xl font-black text-blue-400 outline-none">
                         <button onclick="startTracking()" class="bg-[#2f67e2] px-10 text-white font-black text-2xl active:bg-blue-800">追蹤</button>
                     </div>
                     <select id="spike-select" onchange="selectFromDropdown(this)" class="mt-4 w-full bg-gray-800 border border-gray-700 p-4 rounded-xl text-lg text-yellow-500 font-bold outline-none"></select>
                 </div>
                 <div id="stock-header" class="hidden border-l-[10px] border-yellow-500 pl-8 py-4 bg-black/20 rounded-r-3xl">
                     <h2 id="res-name" class="text-6xl font-black text-white tracking-tight mb-4 uppercase">--</h2>
-                    <div class="flex items-baseline space-x-8">
+                    <div class="flex flex-wrap items-baseline gap-x-8 gap-y-3">
                         <span class="text-white text-2xl font-bold uppercase">現價: <b id="res-price" class="text-blue-400 text-5xl font-mono">--</b></span>
+                        <span class="text-gray-400 text-lg uppercase tracking-tighter">MA5: <b id="res-ma5" class="text-emerald-400 text-2xl font-mono">--</b></span>
                         <span class="text-gray-400 text-lg uppercase tracking-tighter">20MA: <b id="res-ma" class="text-yellow-500 text-2xl font-mono">--</b></span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="metric">
+                        <div class="text-xs text-gray-500 font-black uppercase">Score</div>
+                        <div id="metric-score" class="text-3xl font-mono font-black text-white">--</div>
+                    </div>
+                    <div class="metric">
+                        <div class="text-xs text-gray-500 font-black uppercase">RSI</div>
+                        <div id="metric-rsi" class="text-3xl font-mono font-black text-white">--</div>
+                    </div>
+                    <div class="metric">
+                        <div class="text-xs text-gray-500 font-black uppercase">Volume</div>
+                        <div id="metric-volume" class="text-3xl font-mono font-black text-white">--</div>
                     </div>
                 </div>
             </div>
@@ -54,17 +129,48 @@
             </div>
         </div>
 
-        <!-- 診斷原因 (大字版) -->
         <div class="bg-gray-900/90 p-8 rounded-3xl border-2 border-gray-800 shadow-2xl">
-            <h3 class="text-yellow-500 font-black text-2xl mb-6 tracking-tighter italic uppercase">📋 AI Diagnostic Reasons</h3>
+            <h3 class="text-yellow-500 font-black text-2xl mb-6 tracking-tighter italic uppercase">AI Diagnostic Reasons</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-10 text-white">
                 <div class="space-y-2">
-                    <div class="text-gray-500 font-black text-sm uppercase tracking-widest ml-1">● 當沖判斷依據</div>
-                    <div id="day-reason" class="reason-box">等待輸入代號...</div>
+                    <div class="text-gray-500 font-black text-sm uppercase tracking-widest ml-1">加分條件</div>
+                    <div id="day-reason" class="reason-box">輸入股票代號後開始分析。</div>
                 </div>
                 <div class="space-y-2">
-                    <div class="text-gray-500 font-black text-sm uppercase tracking-widest ml-1">● 波段趨勢依據</div>
-                    <div id="swing-reason" class="reason-box">等待輸入代號...</div>
+                    <div class="text-gray-500 font-black text-sm uppercase tracking-widest ml-1">風險提醒</div>
+                    <div id="swing-reason" class="reason-box">系統會同時檢查 MA20、RSI 與短線量能。</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 bg-[#0f1623] border border-gray-800 rounded-2xl p-6 shadow-xl">
+            <div class="flex items-center justify-between gap-4 mb-4">
+                <h3 class="text-blue-400 font-black text-lg uppercase tracking-wide">控制變數解讀</h3>
+                <span id="explain-status" class="text-xs text-gray-500 font-bold uppercase">Live</span>
+            </div>
+            <div id="control-summary" class="text-2xl font-black text-white mb-5 leading-snug">
+                輸入股票代號後，這裡會即時說明 Score、MA5、20MA、RSI 與量能的判斷。
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-3 text-sm">
+                <div class="bg-black/25 border border-gray-800 rounded-xl p-4">
+                    <div class="text-gray-500 font-black uppercase mb-1">Score</div>
+                    <div id="explain-score" class="text-gray-200 leading-relaxed">綜合分數，>= 4 偏強，<= -2 偏風險。</div>
+                </div>
+                <div class="bg-black/25 border border-gray-800 rounded-xl p-4">
+                    <div class="text-gray-500 font-black uppercase mb-1">MA5</div>
+                    <div id="explain-ma5" class="text-gray-200 leading-relaxed">短線均價，用來看當下是否轉強。</div>
+                </div>
+                <div class="bg-black/25 border border-gray-800 rounded-xl p-4">
+                    <div class="text-gray-500 font-black uppercase mb-1">20MA</div>
+                    <div id="explain-ma20" class="text-gray-200 leading-relaxed">日線趨勢，站上偏多，跌破偏弱。</div>
+                </div>
+                <div class="bg-black/25 border border-gray-800 rounded-xl p-4">
+                    <div class="text-gray-500 font-black uppercase mb-1">RSI</div>
+                    <div id="explain-rsi" class="text-gray-200 leading-relaxed">動能指標，45-70 較健康，過高易過熱。</div>
+                </div>
+                <div class="bg-black/25 border border-gray-800 rounded-xl p-4">
+                    <div class="text-gray-500 font-black uppercase mb-1">Vol</div>
+                    <div id="explain-volume" class="text-gray-200 leading-relaxed">短線量能倍率，> 1.5x 表示量能放大。</div>
                 </div>
             </div>
         </div>
@@ -75,83 +181,167 @@
         let activeTicker = null;
         let marketFX = 32.1;
 
-        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW', {hour12:false}); }, 1000);
+        setInterval(() => {
+            document.getElementById('clock').innerText = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+        }, 1000);
 
         async function updateMarket() {
             try {
                 const res = await fetch('/api/market');
                 const data = await res.json();
-                if(!data || data.status !== "success") return;
+                if (!data || data.status !== "success") return;
                 document.getElementById('ntd-val').innerText = data.fx || "--";
                 marketFX = data.fx;
                 const select = document.getElementById('spike-select');
-                select.innerHTML = '<option value="">🔥 掃描爆量股 (量增 > 2x)...</option>';
+                select.innerHTML = '<option value="">暴量觀察清單目前無資料</option>';
                 (data.spikes || []).forEach(s => {
                     const opt = document.createElement('option');
-                    opt.value = s.ticker; opt.innerText = `【${s.ratio}x】 ${s.name} - $${s.price}`;
+                    opt.value = s.ticker;
+                    opt.innerText = `${s.ratio}x ${s.name} - $${s.price}`;
                     select.appendChild(opt);
                 });
-            } catch(e){}
+            } catch (e) {}
         }
 
-        function selectFromDropdown(el) { if(el.value) { document.getElementById('stock-ticker').value = el.value; startTracking(); } }
-        function startTracking() { activeTicker = document.getElementById('stock-ticker').value; if(activeTicker) refresh(); }
+        function selectFromDropdown(el) {
+            if (el.value) {
+                document.getElementById('stock-ticker').value = el.value;
+                startTracking();
+            }
+        }
+
+        function startTracking() {
+            activeTicker = document.getElementById('stock-ticker').value.trim();
+            if (activeTicker) refresh();
+        }
+
+        function renderList(items, fallback, colorClass) {
+            if (!items || !items.length) return `<div class="text-gray-400">${fallback}</div>`;
+            return items.map(item => `<div><span class="${colorClass}">●</span> ${item}</div>`).join('');
+        }
+
+        function describeScore(score) {
+            if (score >= 4) return "分數已達強勢進場門檻，整體條件偏多。";
+            if (score >= 2) return "分數偏多，但還沒到強勢進場，適合觀察確認。";
+            if (score <= -2) return "分數落入風險區，系統偏向出場或避免追價。";
+            return "分數接近中性，訊號還不夠明確。";
+        }
+
+        function updateControlExplanation(data) {
+            const price = Number(data.price);
+            const ma5 = Number(data.ma5);
+            const ma20 = Number(data.ma20);
+            const rsi = Number(data.rsi);
+            const volume = Number(data.volume_ratio);
+            const score = Number(data.score);
+
+            const ma5Text = price > ma5
+                ? `現價 ${price} 高於 MA5 ${ma5}，短線價格偏強。`
+                : `現價 ${price} 低於 MA5 ${ma5}，短線動能轉弱。`;
+            const ma20Text = price > ma20
+                ? `現價站上 20MA ${ma20}，波段結構偏多。`
+                : `現價跌破 20MA ${ma20}，波段結構偏弱。`;
+            const rsiText = rsi > 75
+                ? `RSI ${rsi} 偏過熱，追價風險提高。`
+                : rsi < 30
+                    ? `RSI ${rsi} 偏弱，先觀察止跌。`
+                    : rsi >= 45 && rsi <= 70
+                        ? `RSI ${rsi} 位於健康動能區。`
+                        : `RSI ${rsi} 屬於中性區，動能還不極端。`;
+            const volumeText = volume >= 1.5
+                ? `Vol ${volume}x 代表近 5 分鐘量能明顯放大。`
+                : volume < 0.7
+                    ? `Vol ${volume}x 代表量能不足，突破可信度較低。`
+                    : `Vol ${volume}x 屬於一般量能，訊號需要價格配合。`;
+
+            document.getElementById('control-summary').innerText = `${describeScore(score)} ${ma20Text} ${rsiText}`;
+            document.getElementById('explain-score').innerText = `Score ${score}：${describeScore(score)}`;
+            document.getElementById('explain-ma5').innerText = ma5Text;
+            document.getElementById('explain-ma20').innerText = ma20Text;
+            document.getElementById('explain-rsi').innerText = rsiText;
+            document.getElementById('explain-volume').innerText = volumeText;
+        }
 
         async function refresh() {
-            if(!activeTicker) return;
+            if (!activeTicker) return;
             try {
                 const res = await fetch(`/api/stock/${activeTicker}`);
                 const data = await res.json();
-                if(data.status === 'success') {
-                    document.getElementById('stock-header').classList.remove('hidden');
-                    document.getElementById('res-name').innerText = data.name;
-                    document.getElementById('res-price').innerText = data.price;
-                    document.getElementById('res-ma').innerText = data.ma20;
-                    document.getElementById('chart-date').innerText = `Date: ${data.date} (Intraday)`;
-                    
-                    const db = document.getElementById('day-box'), sb = document.getElementById('swing-box');
-                    const dr = document.getElementById('day-reason'), sr = document.getElementById('swing-reason');
-                    
-                    db.classList.remove('is-buy','is-danger','is-wait');
-                    if(data.action==="ENTRY"){ 
-                        db.classList.add('is-buy'); document.getElementById('day-verdict').innerText="適合上車";
-                        dr.innerHTML = `<div>● <span class="text-green-400">強勢突破：</span>現價 ${data.price} 帶量突破 MA5。</div><div class="text-gray-400 text-lg font-medium mt-2">短線攻擊動能充足，建議分批切入。</div>`;
-                    } else if(data.action==="EXIT"){ 
-                        db.classList.add('is-danger'); document.getElementById('day-verdict').innerText="建議下車";
-                        dr.innerHTML = `<div>● <span class="text-red-400">警報：</span>跌破均線或出現長上影。</div><div class="text-gray-400 text-lg font-medium mt-2">主力出貨訊號強烈，建議立即停損或止盈。</div>`;
-                    } else { 
-                        document.getElementById('day-verdict').innerText="持有觀望";
-                        dr.innerHTML = `<div>● <span class="text-gray-500">中性：</span>量價橫盤震盪。</div><div class="text-gray-400 text-lg font-medium mt-2">無明確發動跡象，手不要癢，繼續追蹤。</div>`;
-                    }
+                if (data.status !== 'success') {
+                    document.getElementById('day-verdict').innerText = "查無資料";
+                    return;
+                }
 
-                    sb.classList.remove('is-buy','is-danger');
-                    if(data.is_above_ma20){ 
-                        sb.classList.add('is-buy'); document.getElementById('swing-verdict').innerText="多頭趨勢";
-                        sr.innerHTML = `<div>● <span class="text-green-400">生命線安全：</span>股價站穩月線 ${data.ma20}。</div><div class="text-gray-400 text-lg font-medium mt-2">長線多頭架構完好，適合波段續抱。</div>`;
-                    } else { 
-                        sb.classList.add('is-danger'); document.getElementById('swing-verdict').innerText="空頭觀望";
-                        sr.innerHTML = `<div>● <span class="text-red-400">空頭警示：</span>低於生命線 ${data.ma20}。</div><div class="text-gray-400 text-lg font-medium mt-2">趨勢尚未扭轉，未站回月線前不動手。</div>`;
-                    }
-                    renderChart(data.intraday, data.ma20);
-                } else { document.getElementById('day-verdict').innerText = "查無資料"; }
-            } catch(e){}
+                document.getElementById('stock-header').classList.remove('hidden');
+                document.getElementById('res-name').innerText = data.name;
+                document.getElementById('res-price').innerText = data.price;
+                document.getElementById('res-ma5').innerText = data.ma5;
+                document.getElementById('res-ma').innerText = data.ma20;
+                document.getElementById('metric-score').innerText = data.score;
+                document.getElementById('metric-rsi').innerText = data.rsi ?? "--";
+                document.getElementById('metric-volume').innerText = `${data.volume_ratio}x`;
+                document.getElementById('ctrl-score').innerText = data.score;
+                document.getElementById('ctrl-ma5').innerText = data.ma5;
+                document.getElementById('ctrl-ma20').innerText = data.ma20;
+                document.getElementById('ctrl-rsi').innerText = data.rsi ?? "--";
+                document.getElementById('ctrl-volume').innerText = `${data.volume_ratio}x`;
+                document.getElementById('chart-date').innerText = `Date: ${data.date} (Intraday)`;
+
+                const db = document.getElementById('day-box');
+                const sb = document.getElementById('swing-box');
+                db.classList.remove('is-buy', 'is-danger', 'is-wait');
+                sb.classList.remove('is-buy', 'is-danger', 'is-wait');
+
+                if (data.action === "ENTRY") {
+                    db.classList.add('is-buy');
+                    document.getElementById('day-verdict').innerText = "強勢進場";
+                } else if (data.action === "EXIT") {
+                    db.classList.add('is-danger');
+                    document.getElementById('day-verdict').innerText = "風險出場";
+                } else {
+                    db.classList.add('is-wait');
+                    document.getElementById('day-verdict').innerText = "觀望等待";
+                }
+
+                if (data.is_above_ma20) {
+                    sb.classList.add('is-buy');
+                    document.getElementById('swing-verdict').innerText = "波段偏多";
+                } else {
+                    sb.classList.add('is-danger');
+                    document.getElementById('swing-verdict').innerText = "波段偏空";
+                }
+
+                document.getElementById('day-reason').innerHTML = renderList(data.reasons, "目前沒有明確加分條件。", "text-green-400");
+                document.getElementById('swing-reason').innerHTML = renderList(data.warnings, "目前沒有明顯風險警訊。", "text-red-400");
+                updateControlExplanation(data);
+                renderChart(data.intraday, data.ma20);
+            } catch (e) {}
         }
 
         function renderChart(cd, ma20) {
             const ctx = document.getElementById('intradayChart').getContext('2d');
-            if(myChart) myChart.destroy();
+            if (myChart) myChart.destroy();
             myChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: cd.labels,
                     datasets: [
-                        { label: '股價', data: cd.prices, borderColor: '#3b82f6', borderWidth: 4, pointRadius: 0, tension: 0.1, fill: false },
+                        { label: '現價', data: cd.prices, borderColor: '#3b82f6', borderWidth: 4, pointRadius: 0, tension: 0.1, fill: false },
                         { label: '20MA', data: Array(cd.labels.length).fill(ma20), borderColor: '#ef4444', borderDash: [6, 6], borderWidth: 2, pointRadius: 0, fill: false }
                     ]
                 },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: true, ticks: { color: '#444', maxTicksLimit: 10 } }, y: { ticks: { color: '#666', font: { size: 12 } }, grid: { color: '#1a1a1a' } } } }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: true, ticks: { color: '#444', maxTicksLimit: 10 } },
+                        y: { ticks: { color: '#666', font: { size: 12 } }, grid: { color: '#1a1a1a' } }
+                    }
+                }
             });
         }
+
         updateMarket();
         setInterval(updateMarket, 60000);
         setInterval(refresh, 10000);
