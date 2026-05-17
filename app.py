@@ -10,7 +10,7 @@ from flask import Flask, jsonify, render_template
 
 app = Flask(__name__)
 
-MONITOR_POOL = [
+FALLBACK_POOL = [
     "2330", "2317", "2454", "2303", "2382", "3231", "3661", "3711",
     "3034", "2379", "2357", "2383", "3017", "2368", "2408", "3443",
     "2344", "2409", "3481", "1513", "1519", "1504", "2603", "2609",
@@ -21,6 +21,8 @@ MONITOR_POOL = [
 
 cache = {
     "candidates": [],
+    "monitor_pool": FALLBACK_POOL,
+    "pool_source": "fallback",
     "last_scan": "--",
     "scan_status": "warming",
     "names": {},
@@ -30,6 +32,17 @@ cache = {
 
 def clean_ticker(ticker):
     return ticker.strip().upper().replace(".TW", "").replace(".TWO", "")
+
+
+def parse_number(value):
+    try:
+        return int(str(value).replace(",", "").replace("--", "0").strip())
+    except Exception:
+        return 0
+
+
+def is_common_stock_code(code):
+    return code.isdigit() and len(code) == 4 and not code.startswith("0")
 
 
 def scalar(value):
@@ -123,6 +136,118 @@ def build_signal(curr_p, ma5, ma20, rsi, volume_ratio):
     return action, score, reasons, warnings
 
 
+def request_json(url, params):
+    headers = {"User-Agent": "Mozilla/5.0"}
+    response = requests.get(url, params=params, headers=headers, timeout=15)
+    response.raise_for_status()
+    return response.json()
+
+
+def roc_date(day):
+    return f"{day.year - 1911}/{day.month:02d}/{day.day:02d}"
+
+
+def extract_volume_rows(payload):
+    rows = []
+
+    if isinstance(payload, list):
+        for item in payload:
+            code = str(item.get("Code", "")).strip()
+            if not is_common_stock_code(code):
+                continue
+            rows.append({
+                "ticker": code,
+                "name": str(item.get("Name", code)).strip(),
+                "volume": parse_number(item.get("TradeVolume", 0)),
+            })
+        return rows
+
+    def collect(fields, data_rows):
+        if not fields or not data_rows:
+            return
+        code_idx = next((i for i, f in enumerate(fields) if "代號" in str(f)), None)
+        name_idx = next((i for i, f in enumerate(fields) if "名稱" in str(f)), None)
+        vol_idx = next((i for i, f in enumerate(fields) if "成交股數" in str(f) or "成交股" in str(f)), None)
+        if code_idx is None or vol_idx is None:
+            return
+        for row in data_rows:
+            if len(row) <= max(code_idx, vol_idx):
+                continue
+            code = str(row[code_idx]).strip()
+            if not is_common_stock_code(code):
+                continue
+            rows.append({
+                "ticker": code,
+                "name": str(row[name_idx]).strip() if name_idx is not None and len(row) > name_idx else code,
+                "volume": parse_number(row[vol_idx]),
+            })
+
+    for key, value in payload.items():
+        if key.startswith("fields"):
+            suffix = key.replace("fields", "")
+            collect(value, payload.get(f"data{suffix}", []))
+
+    for table in payload.get("tables", []):
+        collect(table.get("fields"), table.get("data"))
+
+    collect(payload.get("fields"), payload.get("data"))
+    collect(payload.get("fields"), payload.get("aaData"))
+    return rows
+
+
+def fetch_twse_volume_rows(day):
+    payload = request_json("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", {})
+    return extract_volume_rows(payload)
+
+
+def fetch_tpex_volume_rows(day):
+    endpoints = [
+        (
+            "https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes",
+            {"response": "json", "date": roc_date(day)},
+        ),
+        (
+            "https://www.tpex.org.tw/web/stock/aftertrading/daily_close_quotes/stk_quote_result.php",
+            {"l": "zh-tw", "o": "json", "d": roc_date(day), "s": "0,asc,0"},
+        ),
+    ]
+    for url, params in endpoints:
+        try:
+            rows = extract_volume_rows(request_json(url, params))
+            if rows:
+                return rows
+        except Exception:
+            continue
+    return []
+
+
+def fetch_top_volume_pool(limit=300):
+    today = datetime.now()
+    rows = []
+    try:
+        rows.extend(fetch_twse_volume_rows(today))
+    except Exception:
+        pass
+    try:
+        rows.extend(fetch_tpex_volume_rows(today))
+    except Exception:
+        pass
+
+    merged = {}
+    for row in rows:
+        if row["volume"] <= 0:
+            continue
+        current = merged.get(row["ticker"])
+        if not current or row["volume"] > current["volume"]:
+            merged[row["ticker"]] = row
+
+    ranked = sorted(merged.values(), key=lambda item: item["volume"], reverse=True)
+    if ranked:
+        return [row["ticker"] for row in ranked[:limit]], "official latest"
+
+    return FALLBACK_POOL, "fallback"
+
+
 def download_stock_frames(ticker):
     pure = clean_ticker(ticker)
     for suffix in [".TW", ".TWO"]:
@@ -200,8 +325,12 @@ def rank_candidate(item):
 
 
 def scan_top_candidates():
+    pool, pool_date = fetch_top_volume_pool(limit=300)
+    cache["monitor_pool"] = pool
+    cache["pool_source"] = pool_date
+
     candidates = []
-    for ticker in MONITOR_POOL:
+    for ticker in pool:
         try:
             item = analyze_stock(ticker, include_intraday=False)
             if not item:
@@ -249,6 +378,8 @@ def market_api():
         "fx": cache["fx"],
         "spikes": cache["candidates"],
         "candidates": cache["candidates"],
+        "pool_size": len(cache["monitor_pool"]),
+        "pool_source": cache["pool_source"],
         "last_scan": cache["last_scan"],
         "scan_status": cache["scan_status"],
     })

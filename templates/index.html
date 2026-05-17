@@ -195,10 +195,10 @@
                 const select = document.getElementById('spike-select');
                 const candidates = data.candidates || data.spikes || [];
                 const scanLabel = data.scan_status === "scanning"
-                    ? "AI Top 10 候選清單掃描中..."
+                    ? `AI Top 10 掃描中 | 股票池 ${data.pool_size || "--"} 檔`
                     : candidates.length === 0
-                        ? "AI Top 10 候選清單目前無符合條件標的"
-                        : `AI Top 10 候選清單 | 更新 ${data.last_scan}`;
+                        ? `AI Top 10 目前無符合條件標的 | 股票池 ${data.pool_size || "--"} 檔`
+                        : `AI Top 10 | 股票池 ${data.pool_size || "--"} 檔 | ${data.pool_source || "--"}`;
                 select.innerHTML = `<option value="">${scanLabel}</option>`;
                 candidates.forEach((s, index) => {
                     const opt = document.createElement('option');
